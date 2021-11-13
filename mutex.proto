@@ -1,0 +1,25 @@
+syntax = "proto3";
+package GRPCex;
+option go_package = "./test";
+
+service CriticalSectionService {
+  rpc Subscribe(JoinMessage) returns (stream AccessGranted) {}
+  rpc RequestAccess(RequestMessage) returns (MessageAcknowledgement) {}
+  rpc Done(DoneMessage) returns (MessageAcknowledgement) {}
+}
+
+message JoinMessage {
+  int64 id = 1;
+}
+
+message RequestMessage{
+  int64 id = 1;
+}
+
+message DoneMessage{
+  int64 id = 1;
+}
+
+
+message AccessGranted{}
+message MessageAcknowledgement{}
