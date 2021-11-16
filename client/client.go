@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"google.golang.org/grpc"
 	"io"
 	"log"
@@ -50,7 +49,7 @@ func join(ctx context.Context, client pb.CriticalSectionServiceClient) {
 
 			log.Printf("----(debug: GRANTED ACCESS TO CRITICAL SECTION) \n")
 			accessGranted <- 1
-			fmt.Println("!!!! - wrote in to access granted channel")
+			//fmt.Println("!!!! - wrote in to access granted channel")
 		}
 	}()
 	<-waitChannel
@@ -60,12 +59,8 @@ func requestAccess(ctx context.Context, client pb.CriticalSectionServiceClient) 
 
 	requestMessage := pb.RequestMessage{Id: id}
 
-	ackMsg, err := client.RequestAccess(ctx, &requestMessage)
+	_, err := client.RequestAccess(ctx, &requestMessage)
 	check(err)
-
-	if ackMsg != nil {
-		log.Printf("----(debug: RECIEVED ACKNOWLEDGEMENT MESSAGE FROM SERVER) \n")
-	}
 
 	log.Printf("----(debug: I SUCCESFULLY REQUESTED ACCESS TO THE CRITICAL SECTION) \n")
 }
@@ -74,12 +69,8 @@ func doneWithAccess(ctx context.Context, client pb.CriticalSectionServiceClient)
 
 	doneMessage := pb.DoneMessage{Id: id}
 
-	ackMsg, err := client.Done(ctx, &doneMessage)
+	_, err := client.Done(ctx, &doneMessage)
 	check(err)
-
-	if ackMsg != nil {
-		log.Printf("----(debug: RECIEVED ACKNOWLEDGEMENT MESSAGE FROM SERVER) \n")
-	}
 
 	log.Printf("----(debug: I SUCCESFULLY INFORMED THE SERVER THAT I AM DONE WITH THE CRITICAL SECTION) \n")
 }
@@ -101,16 +92,15 @@ func main() {
 	// Create stream
 	client := pb.NewCriticalSectionServiceClient(conn)
 	go join(context.Background(), client)
-	<- joined
+	<-joined
 
 	for {
-		//r := rand.Intn(500)
-		//time.Sleep(time.Duration(r) * time.Millisecond)
-		time.Sleep(3 * time.Second)
-		requestAccess(context.Background(),client)
-		<- accessGranted
-		//time.Sleep(time.Duration(r) * time.Millisecond)
-		time.Sleep(3 * time.Second)
-		doneWithAccess(context.Background(),client)
+		r := rand.Intn(4000) + 1000
+		time.Sleep(time.Duration(r) * time.Millisecond)
+		requestAccess(context.Background(), client)
+		<-accessGranted
+		r = rand.Intn(4000) + 1000
+		time.Sleep(time.Duration(r) * time.Millisecond)
+		doneWithAccess(context.Background(), client)
 	}
 }

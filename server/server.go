@@ -19,25 +19,32 @@ type CriticalSectionServiceServer struct {
 	pb.UnimplementedCriticalSectionServiceServer
 	nodes []ClientNode
 	queue chan *ClientNode
-	done chan *pb.DoneMessage
+	done  chan *pb.DoneMessage
 }
 
 type ClientNode struct {
-	id int64
+	id      int64
 	channel chan *pb.AccessGranted
 }
 
 func (s *CriticalSectionServiceServer) RequestAccess(_ context.Context, msg *pb.RequestMessage) (*pb.MessageAcknowledgement, error) {
+	for i := 0; i < len(s.nodes); i++ {
+		if s.nodes[i].id == msg.Id {
+			//fmt.Printf("------------------------------------------------------------------------------------WRITING INTO QUEUE NODE WITH THE ID %v \n", msg.Id)
+			s.queue <- &s.nodes[i]
+			//fmt.Println("---------------->  queue len: ", len(s.queue), "<------------------")
+			//fmt.Println("---------------->  queue len: ", s.queue, "<------------------")
 
-	for _, node := range s.nodes {
-		//fmt.Printf("------------------------------------------------------------------- Nodeid: %v, %v \n", node.id, len(node.channel))
+			for i := 0; i < len(s.queue); i++ {
+				content := <-s.queue
+				//fmt.Println(">>> content id: ", content.id, "<<<")
+				s.queue <- content
+			}
 
-		if node.id == msg.Id {
-			fmt.Printf("------------------------------------------------------------------------------------WRITING INTO QUEUE NODE WITH THE ID %v \n", msg.Id)
-			s.queue <- &node
 		}
 		//fmt.Printf("------------------------------------------------------------------- Nodeid: %v, %v \n", node.id, len(node.channel))
 	}
+
 	log.Printf("----(debug: RECEIVED A REQUEST ACCESS MESSAGE FROM CLIENT %v) \n", msg.Id)
 	return &pb.MessageAcknowledgement{}, nil
 }
@@ -53,8 +60,8 @@ func (s *CriticalSectionServiceServer) Subscribe(joinMessage *pb.JoinMessage, st
 	log.Printf("----(debug: CLIENT NODE CONNECTED %v) \n", joinMessage.Id)
 
 	node := ClientNode{
-		id: joinMessage.Id,
-		channel:    make(chan *pb.AccessGranted,10),
+		id:      joinMessage.Id,
+		channel: make(chan *pb.AccessGranted, 10),
 	}
 
 	s.nodes = append(s.nodes, node)
@@ -76,7 +83,7 @@ func newServer() *CriticalSectionServiceServer {
 	s := &CriticalSectionServiceServer{
 		nodes: make([]ClientNode, 0),
 		queue: make(chan *ClientNode, 100),
-		done: make(chan *pb.DoneMessage, 10),
+		done:  make(chan *pb.DoneMessage, 10),
 	}
 	return s
 }
@@ -87,6 +94,10 @@ func main() {
 		log.Fatal(err)
 	}
 	defer file.Close()
+
+	if err := os.Truncate("logFile.log", 0); err != nil {
+		fmt.Printf("Failed to truncate: %v", err)
+	}
 
 	mw := io.MultiWriter(os.Stdout, file)
 	log.SetOutput(mw)
@@ -104,10 +115,10 @@ func main() {
 	log.Printf("server listening at %v", lis.Addr())
 	go func() {
 		server.done <- &pb.DoneMessage{}
-		for{
-			<- server.done
-			next :=<- server.queue
-			fmt.Printf("------------------------------------------------------------------------------------THE NEXT NODE HAS THE ID %v \n", next.id)
+		for {
+			<-server.done
+			next := <-server.queue
+			//fmt.Printf("------------------------------------------------------------------------------------THE NEXT NODE HAS THE ID %v \n", next.id)
 			next.channel <- &pb.AccessGranted{}
 		}
 	}()
